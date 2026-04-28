@@ -959,7 +959,7 @@ const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbw93UlXO1tWeDFU52YX
 const LOGIN_URL    = 'https://alfredoaguado-arch.github.io/cami-app2/';
 const APP_KEY      = 'reportes';
 const META_PREFIX  = 'CAMI_REPORTE_DATA::';
-const VERSION      = '1.2';
+const VERSION      = '1.4';
 
 // Compresión / dimensión máxima de fotos (lado mayor)
 // v1.2: bajado de 1600/0.75 a 1200/0.65 para evitar OOM en móvil con muchas fotos
@@ -1616,12 +1616,16 @@ function drawHeader(doc, folio, hojaN, hojaTotal, subtitulo) {
   doc.setFont('helvetica', 'bold');
   doc.text('Reporte fotográfico', tx, ty + mm(1));
 
+  // v1.4: medir el ancho con el MISMO font/size con que se dibujó.
+  // Antes lo medíamos con el font del sub (normal/9.5pt) y daba un
+  // ancho menor → el sub se montaba sobre el título.
+  const tituloWidth = doc.getTextWidth('Reporte fotográfico');
+
   // Sub (nombre del reporte)
   if (subtitulo) {
     setText(doc, PDF.c.paperOnNavy);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9.5);
-    const tituloWidth = doc.getTextWidth('Reporte fotográfico');
     const subX = tx + tituloWidth + mm(5);
     // Línea separadora
     setDraw(doc, [248, 200, 168]);
@@ -1756,14 +1760,18 @@ function drawDatosCompactos(doc, y, d) {
     doc.setFontSize(6);
     doc.setCharSpace(1);
     doc.text(lab + ':', cx, cy);
-    doc.setCharSpace(0);
+    // v1.4: medir el ancho del label MIENTRAS el charSpace sigue activo.
+    // Antes medíamos después del reset y el ancho calculado era menor
+    // que el real → el value se pegaba al label sin espacio visible.
     const labW = doc.getTextWidth(lab + ':');
+    doc.setCharSpace(0);
+
     setText(doc, PDF.c.navy);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     const vTrunc = truncateText(doc, String(val), mm(60));
-    doc.text(vTrunc, cx + labW + mm(1.5), cy);
-    cx += labW + mm(1.5) + doc.getTextWidth(vTrunc) + mm(6);
+    doc.text(vTrunc, cx + labW + mm(2), cy);
+    cx += labW + mm(2) + doc.getTextWidth(vTrunc) + mm(6);
     if (cx > x + totalW - mm(20)) break;
   }
   return y + h;
@@ -2048,23 +2056,72 @@ async function onSubirReporte() {
     return;
   }
 
-  // v1.2: validar peso ANTES de intentar subir
-  const pdfMB = state.pdfBlob.size / 1024 / 1024;
-  console.log('[CAMI-REPORTES v' + VERSION + '] PDF size:', pdfMB.toFixed(2), 'MB',
-              '· fotos:', state.fotos.length);
+  const d = state.datos;
+  if (!d.proyecto || !d.fecha) {
+    toast('Faltan datos del reporte', 'error');
+    return;
+  }
 
-  if (pdfMB * 1.37 > MAX_PAYLOAD_MB) { // 1.37 = overhead aprox de base64
+  // 1) Pedir folio al backend antes de generar el PDF final
+  showOverlay('Reservando folio…');
+  let folioReal;
+  try {
+    const folioResp = await backendPost({
+      accion: 'siguienteFolio',
+      token: state.session.token,
+      proyecto: d.proyecto,
+      fecha: d.fecha
+    });
+    if (!folioResp || !folioResp.ok) {
+      hideOverlay();
+      if (folioResp && folioResp.sesionExpirada) {
+        toast('Sesión expirada — redirigiendo al login…', 'error');
+        setTimeout(redirectLogin, 1800);
+        return;
+      }
+      toast('No se pudo obtener folio: ' + ((folioResp && folioResp.error) || 'error'), 'error');
+      return;
+    }
+    folioReal = folioResp.folio;
+    console.log('[CAMI-REPORTES v' + VERSION + '] Folio asignado:', folioReal);
+  } catch (e) {
+    console.error('[CAMI-REPORTES] Error obteniendo folio:', e);
+    hideOverlay();
+    toast('Error de red al obtener folio', 'error');
+    return;
+  }
+
+  // 2) Regenerar PDF con el folio real
+  showOverlay('Generando PDF final…');
+  try {
+    await precacheImages(); // por si se limpió el cache después del preview
+    const docFinal = generarPDFFinal(folioReal);
+    state.pdfBlob = docFinal.output('blob');
+    state.pdfDataUrl = null; // ya no usamos el preview anterior
+  } catch (e) {
+    console.error('[CAMI-REPORTES] Error regenerando PDF final:', e);
+    hideOverlay();
+    toast('Error generando PDF final: ' + e.message, 'error');
+    return;
+  }
+
+  const pdfMB = state.pdfBlob.size / 1024 / 1024;
+  console.log('[CAMI-REPORTES v' + VERSION + '] PDF final:', pdfMB.toFixed(2), 'MB · folio:', folioReal);
+
+  // 3) Validar peso antes de subir
+  if (pdfMB * 1.37 > MAX_PAYLOAD_MB) {
+    hideOverlay();
     const ok = confirm(
       'El reporte pesa ~' + pdfMB.toFixed(1) + ' MB y puede fallar al subir.\n\n' +
-      'Te recomendamos:\n' +
-      '  1) Volver a "Atrás" y eliminar algunas fotos.\n' +
-      '  2) O probar a subirlo de todas formas.\n\n' +
       '¿Continuar e intentar subir?'
     );
     if (!ok) return;
+    showOverlay('Subiendo reporte a Drive…');
+  } else {
+    showOverlay('Subiendo reporte a Drive…');
   }
 
-  showOverlay('Subiendo reporte a Drive…');
+  // 4) Codificar PDF a base64
   let pdfBase64;
   try {
     pdfBase64 = await blobToBase64(state.pdfBlob);
@@ -2078,10 +2135,10 @@ async function onSubirReporte() {
   console.log('[CAMI-REPORTES] Base64 length:', pdfBase64.length,
               '(~' + (pdfBase64.length / 1024 / 1024).toFixed(2) + ' MB)');
 
-  const d = state.datos;
   const payload = {
     accion: 'crearReporte',
     token: state.session.token,
+    folio: folioReal, // v1.4: mandar el folio reservado
     proyecto: d.proyecto,
     fecha: d.fecha,
     titulo: d.titulo || ('Reporte ' + d.proyecto + ' ' + formatDateNice(d.fecha)),
@@ -2099,7 +2156,7 @@ async function onSubirReporte() {
     pdfBase64: pdfBase64
   };
 
-  // Llamar al backend con manejo robusto de errores
+  // 5) Subir
   let resp;
   try {
     resp = await backendPost(payload);
@@ -2129,22 +2186,39 @@ async function onSubirReporte() {
     return;
   }
 
-  // ÉXITO real: solo aquí limpiamos draft y mostramos confirmación
+  // 6) ÉXITO: descargar PDF local + limpiar borrador + mostrar confirmación
+  // v1.4: descarga local del PDF en el dispositivo
   try {
-    await clearDraft();
-  } catch (e) { console.warn('clearDraft fail (no bloquea):', e); }
+    downloadBlob(state.pdfBlob, resp.folio + '.pdf');
+  } catch (e) { console.warn('Descarga local falló (no crítico):', e); }
+
+  try { await clearDraft(); } catch (e) { console.warn('clearDraft fail:', e); }
   state.fotos = [];
   state.datos = {};
   state.pdfBlob = null;
   state.pdfDataUrl = null;
-  // Liberar el iframe del preview (suelta memoria del PDF en blob)
   try { $('prevFrame').src = 'about:blank'; } catch (e) {}
 
   $('doneFolio').textContent = resp.folio;
   $('lnkDrive').href = resp.pdfUrl;
   hideOverlay();
   showView('done');
-  toast('Reporte subido correctamente', 'success');
+  toast('Reporte subido y descargado al dispositivo', 'success');
+}
+
+// v1.4: dispara descarga local de un Blob con un nombre dado
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () {
+    try { document.body.removeChild(a); } catch (e) {}
+    try { URL.revokeObjectURL(url); } catch (e) {}
+  }, 1500);
 }
 
 function blobToBase64(blob) {
