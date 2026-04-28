@@ -1,0 +1,2274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>CAMI · Reportes Fotográficos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  /* ============================================================
+     CAMI · Reportes — Frontend móvil v1.1
+     Identidad para la pantalla (no QA: eso vive en el PDF).
+     ============================================================ */
+
+  :root {
+    --navy:     #21353E;
+    --navy-2:   #2C4350;
+    --orange:   #F37933;
+    --orange-d: #DA6928;
+    --paper:    #FAF6EE;
+    --paper-2:  #F2EBDD;
+    --rule:     #E0D7C4;
+    --rule-2:   #C8BCA1;
+    --ink:      #1A2A32;
+    --ink-soft: #5A6E78;
+    --green:    #2E7D5B;
+    --red:      #B33A2A;
+    --amber:    #C68A2C;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    background: var(--paper);
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  button, input, textarea, select {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* ===== APP SHELL ===== */
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--paper);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .app-header {
+    background: var(--navy);
+    color: var(--paper);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    flex-shrink: 0;
+    border-bottom: 3px solid var(--orange);
+  }
+  .app-header .back {
+    width: 36px; height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--paper);
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s;
+  }
+  .app-header .back:active { background: rgba(255,255,255,0.1); }
+  .app-header .back svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2.4; }
+  .app-header .titles { flex: 1; min-width: 0; }
+  .app-header .eyebrow {
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--orange);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .app-header h1 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -0.005em;
+    line-height: 1.1;
+    color: var(--paper);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-header .user {
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(250,246,238,0.7);
+    margin-top: 2px;
+  }
+
+  .app-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    background:
+      linear-gradient(rgba(33,53,62,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(33,53,62,0.025) 1px, transparent 1px),
+      var(--paper);
+    background-size: 24px 24px;
+  }
+
+  .app-footer {
+    flex-shrink: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--paper);
+    border-top: 1px solid var(--rule);
+    display: flex;
+    gap: 10px;
+  }
+
+  /* ===== VIEWS ===== */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .view-title {
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--navy);
+    padding-bottom: 4px;
+    border-bottom: 2px solid var(--orange);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .view-title .num {
+    color: var(--orange);
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  /* ===== BUTTONS ===== */
+  .btn {
+    border: none;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-primary {
+    background: var(--orange);
+    color: var(--navy);
+    box-shadow: 0 2px 0 var(--orange-d);
+  }
+  .btn-primary:active:not(:disabled) {
+    box-shadow: 0 0 0 var(--orange-d);
+    transform: translateY(2px);
+  }
+
+  .btn-secondary {
+    background: var(--navy);
+    color: var(--paper);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--navy);
+    border: 1.5px solid var(--rule-2);
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1.5px solid var(--red);
+  }
+
+  .btn-block { width: 100%; }
+  .btn-sm { padding: 8px 12px; min-height: 36px; font-size: 11px; }
+
+  /* ===== FORM ELEMENTS ===== */
+  .field { margin-bottom: 14px; }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .field-row > .field { margin-bottom: 0; }
+
+  .label {
+    display: block;
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .label .req { color: var(--orange); margin-left: 2px; }
+
+  .input,
+  .select,
+  .textarea {
+    width: 100%;
+    background: white;
+    border: 1.2px solid var(--rule-2);
+    border-radius: 8px;
+    padding: 11px 12px;
+    font-size: 15px;
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    outline: none;
+    border-color: var(--orange);
+    box-shadow: 0 0 0 3px rgba(243,121,51,0.15);
+  }
+  .textarea { resize: none; min-height: 70px; line-height: 1.4; }
+
+  /* ===== HERO INICIO ===== */
+  .hero {
+    background: var(--navy);
+    color: var(--paper);
+    border-radius: 14px;
+    padding: 22px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--orange);
+  }
+  .hero .eyebrow {
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 8px;
+  }
+  .hero h2 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    line-height: 1.15;
+    margin-bottom: 6px;
+  }
+  .hero p {
+    font-size: 13px;
+    color: rgba(250,246,238,0.75);
+    line-height: 1.4;
+  }
+
+  .menu-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: white;
+    border: 1.2px solid var(--rule);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s;
+    width: 100%;
+    text-align: left;
+  }
+  .menu-card:active { transform: scale(0.99); border-color: var(--orange); }
+  .menu-card .icon {
+    width: 44px; height: 44px;
+    background: var(--paper-2);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--navy);
+    flex-shrink: 0;
+  }
+  .menu-card .icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .menu-card .text { flex: 1; min-width: 0; }
+  .menu-card .text .t {
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+  .menu-card .text .s {
+    font-size: 12px;
+    color: var(--ink-soft);
+    line-height: 1.3;
+  }
+  .menu-card .arrow {
+    color: var(--rule-2);
+    flex-shrink: 0;
+  }
+  .menu-card .arrow svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+  /* ===== STEPPER ===== */
+  .stepper {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 4px;
+  }
+  .stepper .step {
+    flex: 1;
+    height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+  }
+  .stepper .step.done { background: var(--orange); }
+  .stepper .step.current { background: var(--orange); }
+  .stepper .label-step {
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  /* ===== PHOTO LIST ===== */
+  .photo-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .photo-item {
+    display: flex;
+    background: white;
+    border: 1.2px solid var(--rule);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .photo-item .thumb {
+    width: 96px;
+    height: 96px;
+    background: var(--paper-2);
+    flex-shrink: 0;
+    position: relative;
+  }
+  .photo-item .thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .photo-item .thumb .badge {
+    position: absolute;
+    top: 6px; left: 6px;
+    background: var(--orange);
+    color: var(--paper);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+  }
+  .photo-item .body {
+    flex: 1;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .photo-item .desc {
+    flex: 1;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    line-height: 1.3;
+    color: var(--ink);
+    min-height: 50px;
+    resize: none;
+    background: var(--paper);
+    font-family: 'DM Sans', sans-serif;
+  }
+  .photo-item .desc:focus {
+    outline: none;
+    border-color: var(--orange);
+  }
+  .photo-item .actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .photo-item .actions button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--ink-soft);
+    font-family: 'Sora', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .photo-item .actions button:active { background: var(--paper-2); }
+  .photo-item .actions button.del { color: var(--red); }
+
+  .empty-photos {
+    text-align: center;
+    padding: 32px 16px;
+    border: 2px dashed var(--rule-2);
+    border-radius: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+  .empty-photos svg { width: 40px; height: 40px; stroke: currentColor; fill: none; stroke-width: 1.5; margin-bottom: 8px; }
+  .empty-photos p { font-size: 13px; }
+
+  .photo-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .photo-buttons input[type=file] { display: none; }
+
+  /* ===== PREVIEW ===== */
+  .preview-wrap {
+    background: #d8d4cc;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 14px;
+    border: 1px solid var(--rule-2);
+  }
+  .preview-wrap iframe {
+    width: 100%;
+    height: 60vh;
+    border: none;
+    display: block;
+    background: white;
+  }
+  .preview-info {
+    background: var(--paper-2);
+    border-left: 4px solid var(--orange);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .preview-info .label {
+    margin-bottom: 4px;
+  }
+  .preview-info .value {
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    color: var(--navy);
+    font-size: 14px;
+    word-break: break-all;
+  }
+
+  /* ===== CONFIRMATION ===== */
+  .confirmation {
+    text-align: center;
+    padding: 24px 16px;
+  }
+  .confirmation .icon-ok {
+    width: 72px;
+    height: 72px;
+    background: var(--green);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+  }
+  .confirmation .icon-ok svg { width: 40px; height: 40px; stroke: currentColor; fill: none; stroke-width: 3; }
+  .confirmation h3 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--navy);
+    margin-bottom: 8px;
+  }
+  .confirmation .folio-card {
+    background: var(--paper-2);
+    border-radius: 10px;
+    padding: 14px;
+    margin: 16px 0;
+    border-left: 4px solid var(--orange);
+  }
+  .confirmation .folio-card .label { margin-bottom: 4px; }
+  .confirmation .folio-card .folio {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    color: var(--navy);
+    font-size: 14px;
+    word-break: break-all;
+  }
+
+  /* ===== LIST OF REPORTS ===== */
+  .reports-list { display: flex; flex-direction: column; gap: 8px; }
+  .report-card {
+    background: white;
+    border: 1.2px solid var(--rule);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .report-card:active { border-color: var(--orange); }
+  .report-card .name {
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--navy);
+    margin-bottom: 4px;
+    word-break: break-all;
+  }
+  .report-card .meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .report-card .meta .proy {
+    background: var(--paper-2);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-family: 'Sora', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 9px;
+  }
+
+  /* ===== LOADING / TOASTS ===== */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(33,53,62,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .overlay.active { display: flex; }
+  .overlay .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(250,246,238,0.2);
+    border-top-color: var(--orange);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .overlay .msg {
+    color: var(--paper);
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 16px;
+    text-align: center;
+    padding: 0 24px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: var(--navy);
+    color: var(--paper);
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 2000;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    transition: transform 0.3s;
+    max-width: 90%;
+    text-align: center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--red); }
+  .toast.success { background: var(--green); }
+
+  .draft-banner {
+    background: var(--amber);
+    color: var(--paper);
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .draft-banner button {
+    background: rgba(255,255,255,0.2);
+    color: var(--paper);
+    border: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-family: 'Sora', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ===== CONFIG WARNING ===== */
+  .config-warning {
+    background: var(--red);
+    color: white;
+    padding: 16px;
+    border-radius: 10px;
+    text-align: center;
+    margin: 20px;
+  }
+  .config-warning code {
+    background: rgba(0,0,0,0.2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  /* ===== UTILS ===== */
+  .text-soft { color: var(--ink-soft); font-size: 13px; }
+  .mb-2 { margin-bottom: 16px; }
+  .mt-2 { margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== HEADER GLOBAL ===== -->
+  <header class="app-header">
+    <button class="back" id="btnBack" style="display:none" aria-label="Atrás">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+    </button>
+    <div class="titles">
+      <div class="eyebrow">CAMI · Reportes</div>
+      <h1 id="hdrTitle">Reporte fotográfico</h1>
+      <div class="user" id="hdrUser"></div>
+    </div>
+    <button class="back" id="btnLogout" style="display:none" aria-label="Cerrar sesión">
+      <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </header>
+
+  <!-- ===== BODY ===== -->
+  <div class="app-body" id="appBody">
+
+    <!-- VIEW: GATE / VERIFICANDO -->
+    <section class="view active" id="view-gate">
+      <div style="text-align:center; padding-top: 80px;">
+        <div class="spinner" style="margin: 0 auto; width:48px; height:48px; border:4px solid var(--rule); border-top-color: var(--orange); border-radius:50%; animation: spin 0.8s linear infinite;"></div>
+        <p class="text-soft" style="margin-top: 16px;">Verificando sesión…</p>
+      </div>
+    </section>
+
+    <!-- VIEW: INICIO -->
+    <section class="view" id="view-home">
+      <div class="hero">
+        <div class="eyebrow">Bienvenido</div>
+        <h2>Reportes fotográficos</h2>
+        <p>Documenta el trabajo realizado con fotos y descripción, vinculado a la OT correspondiente.</p>
+      </div>
+
+      <button class="menu-card" id="btnNuevo">
+        <div class="icon">
+          <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+        <div class="text">
+          <div class="t">Nuevo reporte</div>
+          <div class="s">Captura fotos del trabajo y genera el PDF</div>
+        </div>
+        <div class="arrow">
+          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </button>
+
+      <button class="menu-card" id="btnVerLista">
+        <div class="icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <div class="text">
+          <div class="t">Reportes existentes</div>
+          <div class="s">Consulta y descarga reportes ya generados</div>
+        </div>
+        <div class="arrow">
+          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </button>
+    </section>
+
+    <!-- VIEW: DATOS -->
+    <section class="view" id="view-datos">
+      <div class="label-step">Paso 1 de 3</div>
+      <div class="stepper">
+        <div class="step current"></div>
+        <div class="step"></div>
+        <div class="step"></div>
+      </div>
+
+      <div class="view-title"><span class="num">01</span> Datos del reporte</div>
+
+      <div id="draftBanner" class="draft-banner" style="display:none">
+        <span style="flex:1">Hay un borrador guardado.</span>
+        <button id="btnRecuperar">Recuperar</button>
+        <button id="btnDescartar">Descartar</button>
+      </div>
+
+      <div class="field">
+        <label class="label" for="fProyecto">Proyecto<span class="req">*</span></label>
+        <select class="select" id="fProyecto">
+          <option value="">— Seleccionar —</option>
+        </select>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="label" for="fFecha">Fecha del reporte<span class="req">*</span></label>
+          <input type="date" class="input" id="fFecha">
+        </div>
+        <div class="field">
+          <label class="label" for="fOtFolio">OT / Folio</label>
+          <input type="text" class="input" id="fOtFolio" placeholder="OT-...">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="fTitulo">Título del reporte</label>
+        <input type="text" class="input" id="fTitulo" placeholder="Se autogenera al elegir proyecto y fecha">
+      </div>
+
+      <div class="field">
+        <label class="label" for="fCliente">Cliente</label>
+        <input type="text" class="input" id="fCliente" placeholder="Nombre del cliente">
+      </div>
+
+      <div class="field">
+        <label class="label" for="fUbicacion">Ubicación / sitio</label>
+        <input type="text" class="input" id="fUbicacion" placeholder="Ej. Veolia Tlalnepantla">
+      </div>
+
+      <div class="field">
+        <label class="label" for="fDireccion">Dirección</label>
+        <input type="text" class="input" id="fDireccion" placeholder="Calle, número, colonia">
+      </div>
+
+      <div class="view-title mt-2"><span class="num">02</span> Contacto</div>
+
+      <div class="field">
+        <label class="label" for="fContactoNombre">Nombre</label>
+        <input type="text" class="input" id="fContactoNombre">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="label" for="fContactoTel">Teléfono</label>
+          <input type="tel" class="input" id="fContactoTel">
+        </div>
+        <div class="field">
+          <label class="label" for="fContactoEmpresa">Empresa</label>
+          <input type="text" class="input" id="fContactoEmpresa">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="fContactoEmail">Email</label>
+        <input type="email" class="input" id="fContactoEmail">
+      </div>
+
+      <div class="view-title mt-2"><span class="num">03</span> Descripción del trabajo</div>
+
+      <div class="field">
+        <textarea class="textarea" id="fDescripcion" rows="4" placeholder="Describe brevemente el trabajo realizado…"></textarea>
+      </div>
+    </section>
+
+    <!-- VIEW: FOTOS -->
+    <section class="view" id="view-fotos">
+      <div class="label-step">Paso 2 de 3</div>
+      <div class="stepper">
+        <div class="step done"></div>
+        <div class="step current"></div>
+        <div class="step"></div>
+      </div>
+
+      <div class="view-title"><span class="num">04</span> Fotografías</div>
+
+      <div class="photo-buttons">
+        <label class="btn btn-secondary btn-block" for="inpCamara">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Cámara
+        </label>
+        <input type="file" id="inpCamara" accept="image/*" capture="environment">
+
+        <label class="btn btn-ghost btn-block" for="inpGaleria">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          Galería
+        </label>
+        <input type="file" id="inpGaleria" accept="image/*" multiple>
+      </div>
+
+      <div class="empty-photos" id="emptyPhotos">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+        <p>Aún no hay fotos.<br>Toca <strong>Cámara</strong> o <strong>Galería</strong> para empezar.</p>
+      </div>
+
+      <div class="photo-list" id="photoList"></div>
+
+      <div class="text-soft" style="text-align:center; margin-top:8px;" id="photoCount"></div>
+    </section>
+
+    <!-- VIEW: PREVIEW -->
+    <section class="view" id="view-preview">
+      <div class="label-step">Paso 3 de 3</div>
+      <div class="stepper">
+        <div class="step done"></div>
+        <div class="step done"></div>
+        <div class="step current"></div>
+      </div>
+
+      <div class="view-title"><span class="num">05</span> Vista previa</div>
+
+      <div class="preview-info">
+        <div class="label">Folio asignado al subir</div>
+        <div class="value" id="prevFolio">REP-PROYECTO-NNN-AAAA-MM-DD</div>
+      </div>
+
+      <div class="preview-wrap">
+        <iframe id="prevFrame" title="Vista previa del PDF"></iframe>
+      </div>
+
+      <p class="text-soft" style="text-align:center;">Revisa el PDF y confirma para subir a Drive.</p>
+    </section>
+
+    <!-- VIEW: CONFIRMATION -->
+    <section class="view" id="view-done">
+      <div class="confirmation">
+        <div class="icon-ok">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h3>Reporte subido</h3>
+        <p class="text-soft">Se guardó en Drive y se registró en el sistema.</p>
+
+        <div class="folio-card">
+          <div class="label">Folio</div>
+          <div class="folio" id="doneFolio"></div>
+        </div>
+
+        <a class="btn btn-secondary btn-block" id="lnkDrive" target="_blank" rel="noopener">Abrir en Drive</a>
+        <button class="btn btn-ghost btn-block mt-2" id="btnNuevoMas">Crear otro reporte</button>
+        <button class="btn btn-ghost btn-block mt-2" id="btnVolverInicio">Volver al inicio</button>
+      </div>
+    </section>
+
+    <!-- VIEW: LISTA -->
+    <section class="view" id="view-lista">
+      <div class="view-title"><span class="num">06</span> Reportes existentes</div>
+      <div id="reportsListWrap">
+        <p class="text-soft" style="text-align:center; padding:24px 0;">Cargando…</p>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ===== FOOTER (botones contextuales) ===== -->
+  <footer class="app-footer" id="appFooter" style="display:none">
+    <button class="btn btn-ghost" id="footerSec" style="display:none">Atrás</button>
+    <button class="btn btn-primary btn-block" id="footerPri">Continuar</button>
+  </footer>
+
+</div>
+
+<!-- ===== OVERLAY DE CARGA ===== -->
+<div class="overlay" id="overlay">
+  <div style="text-align:center;">
+    <div class="spinner"></div>
+    <div class="msg" id="overlayMsg">Procesando…</div>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<!--
+================================================================
+SCRIPT — APP LOGIC
+================================================================
+-->
+<script>
+'use strict';
+
+// ============================================================
+// CONFIG
+// ============================================================
+// IMPORTANTE: pega aquí la URL del Apps Script desplegado de
+// cami-reportes v1.1 (la URL nueva del despliegue, NO la del
+// editor). Termina en /exec.
+const BACKEND_URL = 'PEGA_AQUI_LA_URL_DEL_APPS_SCRIPT_DESPLEGADO';
+
+const LOGIN_URL    = 'https://alfredoaguado-arch.github.io/cami-app2/';
+const APP_KEY      = 'reportes';
+const META_PREFIX  = 'CAMI_REPORTE_DATA::';
+const VERSION      = '1.1';
+
+// Compresión / dimensión máxima de fotos (lado mayor)
+const PHOTO_MAX_DIM = 1600;
+const PHOTO_QUALITY = 0.75;
+
+// IndexedDB
+const DB_NAME      = 'cami-reportes';
+const DB_VERSION   = 1;
+const STORE_DRAFT  = 'draft';
+const STORE_PHOTOS = 'photos';
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  session: null,
+  proyectos: [],
+  logoBase64: null,
+  logoMime: null,
+  // Borrador
+  datos: {},
+  fotos: [],   // [{id, dataUrl, descripcion, file_name, ts}]
+  // PDF generado
+  pdfBlob: null,
+  pdfDataUrl: null,
+  // Vista actual y stack para navegación atrás
+  currentView: 'gate',
+  viewStack: []
+};
+
+// ============================================================
+// DOM HELPERS
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+function showView(name, push = true) {
+  if (push && state.currentView !== 'gate' && state.currentView !== name) {
+    state.viewStack.push(state.currentView);
+  }
+  $$('.view').forEach(v => v.classList.remove('active'));
+  const v = $('view-' + name);
+  if (v) v.classList.add('active');
+  state.currentView = name;
+  // scroll arriba
+  $('appBody').scrollTop = 0;
+  updateChrome();
+}
+
+function goBack() {
+  if (state.viewStack.length === 0) {
+    showView('home', false);
+    return;
+  }
+  const prev = state.viewStack.pop();
+  showView(prev, false);
+}
+
+function updateChrome() {
+  const v = state.currentView;
+  // Back button visible cuando hay historial
+  $('btnBack').style.display = state.viewStack.length > 0 ? 'flex' : 'none';
+  // Logout solo en home
+  $('btnLogout').style.display = (v === 'home') ? 'flex' : 'none';
+  // Title contextual
+  const titles = {
+    gate: 'Reporte fotográfico',
+    home: 'Reporte fotográfico',
+    datos: 'Datos del reporte',
+    fotos: 'Fotografías',
+    preview: 'Vista previa',
+    done: 'Reporte enviado',
+    lista: 'Reportes'
+  };
+  $('hdrTitle').textContent = titles[v] || 'Reporte fotográfico';
+
+  // Footer contextual
+  const footer = $('appFooter');
+  const pri = $('footerPri');
+  const sec = $('footerSec');
+  if (v === 'datos') {
+    footer.style.display = 'flex';
+    sec.style.display = 'none';
+    pri.textContent = 'Continuar a fotos';
+    pri.onclick = onContinuarDatos;
+  } else if (v === 'fotos') {
+    footer.style.display = 'flex';
+    sec.style.display = 'inline-flex';
+    sec.textContent = 'Atrás';
+    sec.onclick = goBack;
+    pri.textContent = 'Generar vista previa';
+    pri.onclick = onGenerarPreview;
+  } else if (v === 'preview') {
+    footer.style.display = 'flex';
+    sec.style.display = 'inline-flex';
+    sec.textContent = 'Atrás';
+    sec.onclick = goBack;
+    pri.textContent = 'Subir a Drive';
+    pri.onclick = onSubirReporte;
+  } else {
+    footer.style.display = 'none';
+  }
+}
+
+function showOverlay(msg) {
+  $('overlayMsg').textContent = msg || 'Procesando…';
+  $('overlay').classList.add('active');
+}
+function hideOverlay() {
+  $('overlay').classList.remove('active');
+}
+function toast(msg, type = '') {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+function getSession() {
+  try {
+    const raw = sessionStorage.getItem('cami_session');
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s.token) return null;
+    if (Array.isArray(s.apps) && s.apps.indexOf(APP_KEY) === -1) return null;
+    return s;
+  } catch (e) { return null; }
+}
+
+function redirectLogin() {
+  window.location.href = LOGIN_URL;
+}
+
+// ============================================================
+// BACKEND
+// ============================================================
+async function backendGet(params) {
+  const url = BACKEND_URL + '?' + new URLSearchParams(params).toString();
+  const resp = await fetch(url, { method: 'GET' });
+  return await resp.json();
+}
+async function backendPost(payload) {
+  // Apps Script GAS doesn't accept Content-Type=application/json in CORS,
+  // así que lo mandamos como text/plain (forma estándar del ecosistema CAMI)
+  const resp = await fetch(BACKEND_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  return await resp.json();
+}
+
+// ============================================================
+// INDEXEDDB
+// ============================================================
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_DRAFT))  db.createObjectStore(STORE_DRAFT,  { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(STORE_PHOTOS)) db.createObjectStore(STORE_PHOTOS, { keyPath: 'id' });
+    };
+  });
+}
+
+async function dbPut(store, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put(value);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function dbGet(store, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => { db.close(); resolve(req.result); };
+    req.onerror   = () => { db.close(); reject(req.error); };
+  });
+}
+async function dbDel(store, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(key);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function dbClear(store) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).clear();
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+
+let saveDraftTimer = null;
+function scheduleSaveDraft() {
+  clearTimeout(saveDraftTimer);
+  saveDraftTimer = setTimeout(saveDraft, 800);
+}
+async function saveDraft() {
+  try {
+    captureDatos();
+    await dbPut(STORE_DRAFT, {
+      id: 'current',
+      datos: state.datos,
+      fotos: state.fotos.map(f => ({
+        id: f.id,
+        descripcion: f.descripcion,
+        file_name: f.file_name,
+        ts: f.ts
+      })),
+      ts: Date.now()
+    });
+    // Fotos como blobs por separado
+    for (const f of state.fotos) {
+      // Solo si aún no está guardada
+      const existing = await dbGet(STORE_PHOTOS, f.id);
+      if (!existing) {
+        await dbPut(STORE_PHOTOS, { id: f.id, dataUrl: f.dataUrl });
+      }
+    }
+  } catch (e) {
+    console.warn('saveDraft fail', e);
+  }
+}
+async function loadDraft() {
+  try {
+    const draft = await dbGet(STORE_DRAFT, 'current');
+    if (!draft) return null;
+    return draft;
+  } catch (e) { return null; }
+}
+async function clearDraft() {
+  await dbDel(STORE_DRAFT, 'current');
+  await dbClear(STORE_PHOTOS);
+}
+
+// ============================================================
+// FORM
+// ============================================================
+function setProyectos(lista) {
+  const sel = $('fProyecto');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>';
+  lista.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    sel.appendChild(opt);
+  });
+}
+
+function captureDatos() {
+  state.datos = {
+    proyecto:           $('fProyecto').value.trim(),
+    fecha:              $('fFecha').value,
+    titulo:             $('fTitulo').value.trim(),
+    cliente:            $('fCliente').value.trim(),
+    ubicacion:          $('fUbicacion').value.trim(),
+    direccion:          $('fDireccion').value.trim(),
+    contacto_nombre:    $('fContactoNombre').value.trim(),
+    contacto_telefono:  $('fContactoTel').value.trim(),
+    contacto_empresa:   $('fContactoEmpresa').value.trim(),
+    contacto_email:     $('fContactoEmail').value.trim(),
+    ot_folio:           $('fOtFolio').value.trim(),
+    descripcion:        $('fDescripcion').value.trim()
+  };
+  return state.datos;
+}
+
+function fillDatos(d) {
+  if (!d) return;
+  $('fProyecto').value         = d.proyecto || '';
+  $('fFecha').value            = d.fecha || todayISO();
+  $('fTitulo').value           = d.titulo || '';
+  $('fCliente').value          = d.cliente || '';
+  $('fUbicacion').value        = d.ubicacion || '';
+  $('fDireccion').value        = d.direccion || '';
+  $('fContactoNombre').value   = d.contacto_nombre || '';
+  $('fContactoTel').value      = d.contacto_telefono || '';
+  $('fContactoEmpresa').value  = d.contacto_empresa || '';
+  $('fContactoEmail').value    = d.contacto_email || '';
+  $('fOtFolio').value          = d.ot_folio || '';
+  $('fDescripcion').value      = d.descripcion || '';
+}
+
+function autoTitulo() {
+  const proy = $('fProyecto').value;
+  const fec  = $('fFecha').value;
+  const cur  = $('fTitulo').value.trim();
+  // Si el usuario ya capturó un título "personalizado", no pisar.
+  // Detectamos si el actual fue auto-generado por nosotros.
+  if (cur && !cur.startsWith('Reporte ')) return;
+  if (proy && fec) {
+    $('fTitulo').value = 'Reporte ' + proy + ' ' + formatDateNice(fec);
+  }
+}
+
+// ============================================================
+// FOTOS
+// ============================================================
+function genId() {
+  return 'F' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+}
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+function formatDateNice(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y.slice(2)}`;
+}
+function nowTimestamp() {
+  const d = new Date();
+  return `${pad(d.getDate())} ${monthShort(d.getMonth())} ${d.getFullYear()} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function monthShort(m) {
+  const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return meses[m] || '';
+}
+
+async function onFiles(files) {
+  if (!files || files.length === 0) return;
+  showOverlay(files.length > 1 ? `Procesando ${files.length} fotos…` : 'Procesando foto…');
+  let added = 0;
+  for (const file of files) {
+    if (!file.type || !file.type.startsWith('image/')) continue;
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      const photo = {
+        id: genId(),
+        dataUrl: dataUrl,
+        descripcion: '',
+        file_name: file.name || '',
+        ts: nowTimestamp()
+      };
+      state.fotos.push(photo);
+      added++;
+    } catch (e) {
+      console.error('compress error', e);
+    }
+  }
+  hideOverlay();
+  if (added > 0) {
+    renderPhotos();
+    scheduleSaveDraft();
+    toast(added === 1 ? 'Foto agregada' : `${added} fotos agregadas`, 'success');
+  }
+}
+
+function fileToCompressedDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = () => reject(r.error);
+    r.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('No se pudo decodificar la imagen'));
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          // Escalar al máximo
+          if (width > PHOTO_MAX_DIM || height > PHOTO_MAX_DIM) {
+            if (width >= height) {
+              height = Math.round(height * (PHOTO_MAX_DIM / width));
+              width  = PHOTO_MAX_DIM;
+            } else {
+              width  = Math.round(width * (PHOTO_MAX_DIM / height));
+              height = PHOTO_MAX_DIM;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', PHOTO_QUALITY));
+        } catch (e) { reject(e); }
+      };
+      img.src = r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+function renderPhotos() {
+  const list = $('photoList');
+  const empty = $('emptyPhotos');
+  const count = $('photoCount');
+  list.innerHTML = '';
+  if (state.fotos.length === 0) {
+    empty.style.display = 'block';
+    count.textContent = '';
+    return;
+  }
+  empty.style.display = 'none';
+  count.textContent = state.fotos.length === 1
+    ? '1 foto · 1 hoja'
+    : `${state.fotos.length} fotos · ${Math.ceil(state.fotos.length / 4)} hoja(s)`;
+
+  state.fotos.forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+    item.innerHTML = `
+      <div class="thumb">
+        <span class="badge">${i + 1}</span>
+        <img alt="Foto ${i + 1}">
+      </div>
+      <div class="body">
+        <textarea class="desc" rows="2" placeholder="Descripción…">${escapeHtml(f.descripcion || '')}</textarea>
+        <div class="actions">
+          <button data-act="up"   data-i="${i}" ${i === 0 ? 'disabled style="opacity:.4"' : ''}>↑ Subir</button>
+          <button data-act="down" data-i="${i}" ${i === state.fotos.length - 1 ? 'disabled style="opacity:.4"' : ''}>↓ Bajar</button>
+          <button data-act="del"  data-i="${i}" class="del">Eliminar</button>
+        </div>
+      </div>
+    `;
+    item.querySelector('img').src = f.dataUrl;
+    const ta = item.querySelector('textarea.desc');
+    ta.addEventListener('input', () => {
+      state.fotos[i].descripcion = ta.value;
+      scheduleSaveDraft();
+    });
+    item.querySelectorAll('button[data-act]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.dataset.act;
+        const idx = parseInt(btn.dataset.i, 10);
+        if (act === 'up' && idx > 0) {
+          [state.fotos[idx - 1], state.fotos[idx]] = [state.fotos[idx], state.fotos[idx - 1]];
+        } else if (act === 'down' && idx < state.fotos.length - 1) {
+          [state.fotos[idx + 1], state.fotos[idx]] = [state.fotos[idx], state.fotos[idx + 1]];
+        } else if (act === 'del') {
+          if (!confirm('¿Eliminar esta foto?')) return;
+          dbDel(STORE_PHOTOS, state.fotos[idx].id).catch(()=>{});
+          state.fotos.splice(idx, 1);
+        }
+        renderPhotos();
+        scheduleSaveDraft();
+      });
+    });
+    list.appendChild(item);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// PDF GENERATION (jsPDF nativo + Helvetica)
+// ============================================================
+// Tokens del CAMI QA
+const PDF = {
+  c: {
+    navy:    [33, 53, 62],
+    orange:  [243, 121, 51],
+    paper:   [250, 246, 238],
+    paper2:  [242, 235, 221],
+    rule:    [224, 215, 196],
+    rule2:   [200, 188, 161],
+    ink:     [26, 42, 50],
+    inkSoft: [90, 110, 120],
+    paperOnNavy: [248, 200, 168] // sub-title color sobre navy
+  },
+  // letter landscape: 11" x 8.5" = 792pt x 612pt
+  W: 792,
+  H: 612,
+  pad: { x: 19.84, y: 14.17 } // 7mm x 5mm
+};
+
+// Convierte mm a pt
+function mm(m) { return m * 2.83465; }
+
+function setFill(doc, c)  { doc.setFillColor(c[0], c[1], c[2]); }
+function setDraw(doc, c)  { doc.setDrawColor(c[0], c[1], c[2]); }
+function setText(doc, c)  { doc.setTextColor(c[0], c[1], c[2]); }
+
+function generarPDFParaPreview() {
+  return generarPDFCore({ folioPlaceholder: true });
+}
+
+function generarPDFFinal(folio) {
+  return generarPDFCore({ folio: folio });
+}
+
+function generarPDFCore(opts) {
+  opts = opts || {};
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+  const d = state.datos;
+  const fotos = state.fotos;
+  const numHojas = Math.max(1, Math.ceil(fotos.length / 4));
+
+  // Folio (provisional para preview o real)
+  const folio = opts.folioPlaceholder
+    ? `REP-${(d.proyecto || 'PROYECTO').toUpperCase()}-NNN-${d.fecha || todayISO()}`
+    : opts.folio;
+
+  // Subtítulo del header (nombre del reporte)
+  const subTitulo = d.titulo || ('Reporte ' + (d.proyecto || '') + ' ' + formatDateNice(d.fecha || todayISO()));
+
+  for (let h = 0; h < numHojas; h++) {
+    if (h > 0) doc.addPage();
+
+    // === Fondo paper
+    setFill(doc, PDF.c.paper);
+    doc.rect(0, 0, PDF.W, PDF.H, 'F');
+
+    // === Watermark cuadrícula 12mm
+    drawWatermark(doc);
+
+    // === Header navy
+    drawHeader(doc, folio, h + 1, numHojas, subTitulo);
+
+    // === Cursor Y inicial bajo el header
+    const headerH = mm(18);
+    let cursorY = PDF.pad.y + headerH + mm(2);
+
+    // === Hoja 1: Sección 01 Datos del proyecto
+    if (h === 0) {
+      cursorY = drawSeccionDatosCompleta(doc, cursorY, d);
+    } else {
+      cursorY = drawDatosCompactos(doc, cursorY, d);
+    }
+    cursorY += mm(2.2);
+
+    // === Determinar reservas inferiores
+    const isLast = (h === numHojas - 1);
+    const footerH = mm(5.5);
+    const sigBlockH = isLast ? mm(22) + mm(2) : 0;
+    const bottomReserve = sigBlockH + footerH + mm(2);
+
+    // === Cuadrícula de fotos 2x2
+    const gridTop = cursorY;
+    const gridBottom = PDF.H - PDF.pad.y - bottomReserve;
+    const gridH = gridBottom - gridTop;
+    const gridW = PDF.W - 2 * PDF.pad.x;
+
+    drawPhotosGrid(doc, gridTop, gridW, gridH, fotos, h);
+
+    // === Bloque de firma (solo última hoja)
+    if (isLast) {
+      drawSignature(doc, PDF.H - PDF.pad.y - footerH - mm(2) - mm(22));
+    }
+
+    // === Footer
+    drawFooter(doc, folio);
+  }
+
+  // Metadata embebida en subject
+  const meta = {
+    folio: folio,
+    fecha: d.fecha,
+    proyecto: d.proyecto,
+    titulo: subTitulo,
+    cliente: d.cliente || '',
+    ubicacion: d.ubicacion || '',
+    ot_folio: d.ot_folio || '',
+    num_fotos: fotos.length,
+    creado_por: state.session ? (state.session.user || state.session.nombre || state.session.usuario || '') : '',
+    version: VERSION
+  };
+  doc.setProperties({
+    title:    folio,
+    subject:  META_PREFIX + JSON.stringify(meta),
+    author:   'CAMI · Aceros Manufacturados',
+    keywords: 'CAMI, reporte fotografico, ' + (d.proyecto || ''),
+    creator:  'cami-reportes v' + VERSION
+  });
+
+  return doc;
+}
+
+function drawWatermark(doc) {
+  setDraw(doc, [33, 53, 62]);
+  doc.setLineWidth(0.18);
+  // alpha approximation: dibujamos color pero la línea fina se ve sutil
+  // jsPDF no tiene alpha nativo en draw, así que usamos un gris muy claro:
+  setDraw(doc, [225, 220, 208]);
+  const step = mm(12);
+  for (let x = step; x < PDF.W; x += step) {
+    doc.line(x, 0, x, PDF.H);
+  }
+  for (let y = step; y < PDF.H; y += step) {
+    doc.line(0, y, PDF.W, y);
+  }
+}
+
+function drawHeader(doc, folio, hojaN, hojaTotal, subtitulo) {
+  const x = PDF.pad.x;
+  const y = PDF.pad.y;
+  const w = PDF.W - 2 * PDF.pad.x;
+  const h = mm(18);
+
+  // Fondo navy
+  setFill(doc, PDF.c.navy);
+  doc.roundedRect(x, y, w, h, 3, 3, 'F');
+
+  // Barra naranja derecha
+  setFill(doc, PDF.c.orange);
+  doc.rect(x + w - mm(2), y, mm(2), h, 'F');
+
+  // Logo (a la izquierda, dentro del header)
+  if (state.logoBase64) {
+    try {
+      const logoH = mm(14);
+      const logoW = logoH * 0.75; // proporción ~3:4
+      const logoX = x + mm(5);
+      const logoY = y + (h - logoH) / 2;
+      doc.addImage('data:' + (state.logoMime || 'image/png') + ';base64,' + state.logoBase64,
+                   'PNG', logoX, logoY, logoW, logoH, undefined, 'FAST');
+    } catch (e) { console.warn('logo fail', e); }
+  }
+
+  // Título y eyebrow
+  const tx = x + mm(22);
+  const ty = y + mm(7.5);
+  // Eyebrow naranja arriba
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  setText(doc, PDF.c.orange);
+  doc.setCharSpace(1.4);
+  doc.text('CAMI · REPORTES', tx, ty - mm(3.6));
+  doc.setCharSpace(0);
+
+  // Título principal
+  setText(doc, PDF.c.paper);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Reporte fotográfico', tx, ty + mm(1));
+
+  // Sub (nombre del reporte)
+  if (subtitulo) {
+    setText(doc, PDF.c.paperOnNavy);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    const tituloWidth = doc.getTextWidth('Reporte fotográfico');
+    const subX = tx + tituloWidth + mm(5);
+    // Línea separadora
+    setDraw(doc, [248, 200, 168]);
+    doc.setLineWidth(0.4);
+    doc.line(subX - mm(2.5), ty - mm(2.5), subX - mm(2.5), ty + mm(2));
+    // Texto sub
+    const maxSubW = (x + w - mm(75)) - subX; // hasta cerca del meta
+    const subTrunc = truncateText(doc, subtitulo, maxSubW);
+    doc.text(subTrunc, subX, ty + mm(1));
+  }
+
+  // Meta a la derecha
+  const metaX = x + w - mm(7);
+  setText(doc, PDF.c.paper);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setCharSpace(0.8);
+  doc.text(folio, metaX, ty - mm(2), { align: 'right' });
+  doc.setCharSpace(0);
+  setText(doc, [200, 220, 230]);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setCharSpace(1);
+  doc.text(`HOJA ${hojaN}/${hojaTotal} · ${formatDateNice(state.datos.fecha || todayISO()).toUpperCase()}`,
+            metaX, ty + mm(1.5), { align: 'right' });
+  doc.setCharSpace(0);
+
+  // Línea divisoria sutil entre title y meta
+  // (omitida por simplicidad)
+}
+
+function truncateText(doc, str, maxW) {
+  if (!str) return '';
+  let s = str;
+  while (doc.getTextWidth(s) > maxW && s.length > 4) s = s.slice(0, -1);
+  if (s !== str) s = s.slice(0, -1) + '…';
+  return s;
+}
+
+function drawSecTitle(doc, x, y, num, label) {
+  // Línea naranja debajo
+  setDraw(doc, PDF.c.orange);
+  doc.setLineWidth(1.1);
+  doc.line(x, y + mm(2.5), PDF.W - PDF.pad.x, y + mm(2.5));
+  // Número naranja
+  setText(doc, PDF.c.orange);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(num, x, y + mm(1.5));
+  // Texto navy mayúsculas
+  setText(doc, PDF.c.navy);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setCharSpace(1.4);
+  doc.text(label.toUpperCase(), x + mm(8), y + mm(1.5));
+  doc.setCharSpace(0);
+}
+
+function drawField(doc, x, y, w, label, value) {
+  // Label
+  setText(doc, PDF.c.inkSoft);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.setCharSpace(1);
+  doc.text(label.toUpperCase(), x, y);
+  doc.setCharSpace(0);
+  // Value
+  setText(doc, PDF.c.navy);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const safeVal = value || '—';
+  const truncated = truncateText(doc, safeVal, w - mm(1));
+  doc.text(truncated, x, y + mm(3.4));
+  // Línea inferior
+  setDraw(doc, PDF.c.rule2);
+  doc.setLineWidth(0.4);
+  doc.line(x, y + mm(4.6), x + w, y + mm(4.6));
+}
+
+function drawSeccionDatosCompleta(doc, y, d) {
+  const x = PDF.pad.x;
+  const totalW = PDF.W - 2 * PDF.pad.x;
+  // Sec title
+  drawSecTitle(doc, x, y, '01', 'Datos del proyecto');
+  let cy = y + mm(5.5);
+
+  // Grid 6 columnas: 2 + 2 + 2 (3 columnas usables, cada una span 2)
+  const colW = (totalW - 2 * mm(4)) / 3;
+
+  // Fila 1
+  drawField(doc, x,                       cy, colW, 'Proyecto',           d.proyecto);
+  drawField(doc, x + colW + mm(4),        cy, colW, 'Cliente',            d.cliente);
+  drawField(doc, x + 2*(colW + mm(4)),    cy, colW, 'Ubicación / sitio',  d.ubicacion);
+  cy += mm(7.4);
+  // Fila 2
+  drawField(doc, x,                       cy, colW, 'OT / Folio interno', d.ot_folio);
+  drawField(doc, x + colW + mm(4),        cy, colW, 'Fecha del reporte',  formatDateNice(d.fecha || todayISO()));
+  drawField(doc, x + 2*(colW + mm(4)),    cy, colW,
+            'Contacto',
+            (d.contacto_nombre || '') + (d.contacto_telefono ? ' · ' + d.contacto_telefono : ''));
+  cy += mm(7.4);
+  // Descripción full width (col-6)
+  drawField(doc, x, cy, totalW, 'Descripción del trabajo', d.descripcion);
+  cy += mm(7);
+
+  return cy;
+}
+
+function drawDatosCompactos(doc, y, d) {
+  const x = PDF.pad.x;
+  const totalW = PDF.W - 2 * PDF.pad.x;
+  const h = mm(7);
+
+  // Fondo paper-2 con borde naranja izquierdo
+  setFill(doc, PDF.c.paper2);
+  doc.roundedRect(x, y, totalW, h, 1.5, 1.5, 'F');
+  setFill(doc, PDF.c.orange);
+  doc.rect(x, y, mm(0.8), h, 'F');
+
+  // Pares label : value en línea
+  const pairs = [
+    ['PROYECTO',  d.proyecto || '—'],
+    ['CLIENTE',   d.cliente || '—'],
+    ['OT',        d.ot_folio || '—'],
+    ['SITIO',     d.ubicacion || '—']
+  ];
+  let cx = x + mm(3);
+  const cy = y + mm(4.5);
+  for (const [lab, val] of pairs) {
+    setText(doc, PDF.c.inkSoft);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    doc.setCharSpace(1);
+    doc.text(lab + ':', cx, cy);
+    doc.setCharSpace(0);
+    const labW = doc.getTextWidth(lab + ':');
+    setText(doc, PDF.c.navy);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    const vTrunc = truncateText(doc, String(val), mm(60));
+    doc.text(vTrunc, cx + labW + mm(1.5), cy);
+    cx += labW + mm(1.5) + doc.getTextWidth(vTrunc) + mm(6);
+    if (cx > x + totalW - mm(20)) break;
+  }
+  return y + h;
+}
+
+function drawPhotosGrid(doc, gridTop, gridW, gridH, fotos, hojaIdx) {
+  const x = PDF.pad.x;
+  const gap = mm(2.2);
+  const cellW = (gridW - gap) / 2;
+  const cellH = (gridH - gap) / 2;
+  const start = hojaIdx * 4;
+
+  for (let i = 0; i < 4; i++) {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const cx = x + col * (cellW + gap);
+    const cy = gridTop + row * (cellH + gap);
+    const idxFoto = start + i;
+    const f = fotos[idxFoto];
+
+    // Borde de celda
+    setDraw(doc, PDF.c.rule2);
+    doc.setLineWidth(0.5);
+    setFill(doc, [255, 255, 255]);
+    doc.roundedRect(cx, cy, cellW, cellH, 1.5, 1.5, 'FD');
+
+    if (!f) {
+      // Celda vacía: solo placeholder discreto
+      setText(doc, PDF.c.rule2);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.setCharSpace(1.4);
+      doc.text('SIN FOTO', cx + cellW / 2, cy + cellH / 2, { align: 'center' });
+      doc.setCharSpace(0);
+      continue;
+    }
+
+    // Caption (abajo) altura fija
+    const captionH = mm(11);
+    const imgH = cellH - captionH;
+    // Imagen
+    try {
+      // Ajuste contain dentro del área disponible
+      const padImg = mm(0.5);
+      drawPhotoFit(doc, f.dataUrl, cx + padImg, cy + padImg, cellW - 2 * padImg, imgH - padImg);
+    } catch (e) { console.warn('img fail', e); }
+
+    // Línea divisoria
+    setDraw(doc, PDF.c.rule);
+    doc.setLineWidth(0.4);
+    doc.line(cx, cy + imgH, cx + cellW, cy + imgH);
+
+    // Caption: badge naranja + descripción + timestamp
+    const padCap = mm(2);
+    const capX = cx + padCap;
+    const capY = cy + imgH + mm(2);
+    // Badge naranja
+    setFill(doc, PDF.c.orange);
+    doc.circle(capX + mm(2.5), capY + mm(2.5), mm(2.4), 'F');
+    setText(doc, PDF.c.paper);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(String(idxFoto + 1), capX + mm(2.5), capY + mm(3.4), { align: 'center' });
+
+    // Descripción (con wrap)
+    setText(doc, PDF.c.ink);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    const descX = capX + mm(7);
+    const descW = cellW - mm(7) - 2 * padCap;
+    const descLines = doc.splitTextToSize(f.descripcion || '', descW);
+    // máximo 2 líneas
+    const linesToShow = descLines.slice(0, 2);
+    doc.text(linesToShow, descX, capY + mm(2.2));
+
+    // Timestamp
+    setText(doc, PDF.c.inkSoft);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(5.6);
+    doc.setCharSpace(1);
+    doc.text((f.ts || '').toUpperCase(), descX, capY + mm(8));
+    doc.setCharSpace(0);
+  }
+}
+
+function drawPhotoFit(doc, dataUrl, x, y, w, h) {
+  // Ajuste tipo "cover" sobre el área para llenar sin deformar
+  const im = new Image();
+  // Necesitamos saber dimensiones — sin async esto es complicado.
+  // En la práctica, addImage con w/h fijos hará un "stretch".
+  // Para conservar relación, usamos un canvas auxiliar y leemos la imagen.
+  // Pero ya las imágenes están comprimidas con cierta relación.
+  // Aquí usamos addImage con w/h: jsPDF preserva aspect si pasas w o h en 0,
+  // pero estamos dando ambos; entonces queda "fill". Para nuestro caso
+  // (fotos de cámara) es un compromiso razonable: la celda está cerca
+  // del aspect ratio típico horizontal.
+  // Mejor enfoque: leer dimensiones del dataUrl (sync vía Image cached).
+  try {
+    const img = state._imgCache && state._imgCache[dataUrl];
+    if (img && img.naturalWidth) {
+      const ar = img.naturalWidth / img.naturalHeight;
+      const arBox = w / h;
+      let dw = w, dh = h, dx = x, dy = y;
+      if (ar > arBox) {
+        // imagen más ancha que la caja: ajustar por alto
+        dh = h;
+        dw = h * ar;
+        dx = x - (dw - w) / 2;
+      } else {
+        dw = w;
+        dh = w / ar;
+        dy = y - (dh - h) / 2;
+      }
+      // Recortar al área: jsPDF no recorta nativamente con clip,
+      // así que para evitar overflow usamos 'contain' (no llenar todo).
+      // Recalculamos contain:
+      let cw, ch;
+      if (ar > arBox) { cw = w; ch = w / ar; }
+      else            { ch = h; cw = h * ar; }
+      const cx = x + (w - cw) / 2;
+      const cy = y + (h - ch) / 2;
+      doc.addImage(dataUrl, 'JPEG', cx, cy, cw, ch, undefined, 'FAST');
+    } else {
+      doc.addImage(dataUrl, 'JPEG', x, y, w, h, undefined, 'FAST');
+    }
+  } catch (e) {
+    console.warn('drawPhotoFit fail', e);
+  }
+}
+
+function drawSignature(doc, y) {
+  const blockW = mm(78);
+  const x = PDF.W - PDF.pad.x - blockW;
+  const h = mm(22);
+
+  // Caja blanca con borde
+  setFill(doc, [255, 255, 255]);
+  setDraw(doc, PDF.c.rule2);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(x, y, blockW, h, 1.5, 1.5, 'FD');
+
+  // Title naranja
+  setText(doc, PDF.c.orange);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setCharSpace(1.5);
+  doc.text('RESPONSABLE CAMI', x + mm(3), y + mm(3.5));
+  doc.setCharSpace(0);
+
+  // Subrótulo
+  setText(doc, PDF.c.navy);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.text('Firma de conformidad', x + mm(3), y + mm(6));
+
+  // Línea para firma
+  setDraw(doc, PDF.c.navy);
+  doc.setLineWidth(0.6);
+  doc.line(x + mm(3), y + mm(13), x + blockW - mm(3), y + mm(13));
+
+  // Mini fields nombre / fecha (dos columnas)
+  const fechaX = x + blockW * 0.6;
+  setText(doc, PDF.c.inkSoft);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5.5);
+  doc.setCharSpace(1.2);
+  doc.text('NOMBRE', x + mm(3),  y + mm(16.5));
+  doc.text('FECHA',  fechaX,     y + mm(16.5));
+  doc.setCharSpace(0);
+
+  // Líneas para nombre/fecha
+  setDraw(doc, PDF.c.rule2);
+  doc.setLineWidth(0.4);
+  doc.line(x + mm(3),  y + mm(20), fechaX - mm(2),       y + mm(20));
+  doc.line(fechaX,     y + mm(20), x + blockW - mm(3),   y + mm(20));
+}
+
+function drawFooter(doc, folio) {
+  const x = PDF.pad.x;
+  const w = PDF.W - 2 * PDF.pad.x;
+  const yLine = PDF.H - PDF.pad.y - mm(5);
+
+  // Línea naranja superior
+  setDraw(doc, PDF.c.orange);
+  doc.setLineWidth(1.1);
+  doc.line(x, yLine, x + w, yLine);
+
+  // Marca a la izquierda
+  const yText = yLine + mm(3);
+  // Mark cuadrado navy con C naranja
+  setFill(doc, PDF.c.navy);
+  doc.roundedRect(x, yText - mm(2.5), mm(3.5), mm(3.5), 0.6, 0.6, 'F');
+  setText(doc, PDF.c.orange);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.text('C', x + mm(1.75), yText - mm(0.5), { align: 'center' });
+
+  setText(doc, PDF.c.inkSoft);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.setCharSpace(1);
+  doc.text('CAMI · COMERCIALIZADORA DE ACEROS MANUFACTURADOS PARA LA INDUSTRIA',
+            x + mm(5), yText);
+  doc.setCharSpace(0);
+
+  // Folio a la derecha
+  setText(doc, PDF.c.inkSoft);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setCharSpace(1);
+  doc.text('DOCUMENTO CONTROLADO · ', x + w - mm(38), yText);
+  doc.setFont('helvetica', 'bold');
+  setText(doc, PDF.c.navy);
+  doc.text(folio.toUpperCase(), x + w, yText, { align: 'right' });
+  doc.setCharSpace(0);
+}
+
+// ============================================================
+// IMG CACHE (para conocer aspect ratio antes de dibujar PDF)
+// ============================================================
+async function precacheImages() {
+  state._imgCache = state._imgCache || {};
+  const promises = state.fotos.map(f => new Promise((resolve) => {
+    if (state._imgCache[f.dataUrl]) return resolve();
+    const im = new Image();
+    im.onload = () => { state._imgCache[f.dataUrl] = im; resolve(); };
+    im.onerror = () => resolve(); // no bloqueamos por una imagen
+    im.src = f.dataUrl;
+  }));
+  await Promise.all(promises);
+}
+
+// ============================================================
+// FLOW HANDLERS
+// ============================================================
+function onContinuarDatos() {
+  captureDatos();
+  if (!state.datos.proyecto) {
+    toast('Selecciona un proyecto', 'error');
+    return;
+  }
+  if (!state.datos.fecha) {
+    toast('Captura la fecha del reporte', 'error');
+    return;
+  }
+  saveDraft();
+  showView('fotos');
+}
+
+async function onGenerarPreview() {
+  if (state.fotos.length === 0) {
+    toast('Agrega al menos una foto', 'error');
+    return;
+  }
+  showOverlay('Generando vista previa…');
+  try {
+    await precacheImages();
+    const doc = generarPDFParaPreview();
+    state.pdfDataUrl = doc.output('datauristring');
+    state.pdfBlob    = doc.output('blob');
+    // Folio provisional
+    const proy = (state.datos.proyecto || 'PROYECTO').toUpperCase();
+    const fec  = state.datos.fecha || todayISO();
+    $('prevFolio').textContent = `REP-${proy}-NNN-${fec}`;
+    $('prevFrame').src = state.pdfDataUrl;
+    showView('preview');
+  } catch (e) {
+    console.error(e);
+    toast('Error generando PDF: ' + e.message, 'error');
+  } finally {
+    hideOverlay();
+  }
+}
+
+async function onSubirReporte() {
+  if (!state.session) return redirectLogin();
+  if (!state.pdfBlob) {
+    toast('Genera la vista previa primero', 'error');
+    return;
+  }
+  showOverlay('Subiendo reporte a Drive…');
+  try {
+    // Convertir PDF a base64
+    const pdfBase64 = await blobToBase64(state.pdfBlob);
+    const d = state.datos;
+
+    const payload = {
+      accion: 'crearReporte',
+      token: state.session.token,
+      proyecto: d.proyecto,
+      fecha: d.fecha,
+      titulo: d.titulo || ('Reporte ' + d.proyecto + ' ' + formatDateNice(d.fecha)),
+      ubicacion: d.ubicacion,
+      cliente: d.cliente,
+      direccion: d.direccion,
+      contacto_nombre: d.contacto_nombre,
+      contacto_empresa: d.contacto_empresa,
+      contacto_telefono: d.contacto_telefono,
+      contacto_email: d.contacto_email,
+      ot_folio: d.ot_folio,
+      fotos: state.fotos.map((f, i) => ({
+        orden: i + 1,
+        descripcion: f.descripcion || '',
+        file_name: f.file_name || ''
+      })),
+      pdfBase64: pdfBase64
+    };
+    const resp = await backendPost(payload);
+    if (!resp.ok) {
+      if (resp.sesionExpirada) {
+        toast('Sesión expirada — redirigiendo…', 'error');
+        setTimeout(redirectLogin, 1500);
+        return;
+      }
+      throw new Error(resp.error || 'Error desconocido');
+    }
+    // Limpiar borrador
+    await clearDraft();
+    state.fotos = [];
+    state.datos = {};
+    // Mostrar confirmación
+    $('doneFolio').textContent = resp.folio;
+    $('lnkDrive').href = resp.pdfUrl;
+    showView('done');
+    toast('Reporte subido correctamente', 'success');
+  } catch (e) {
+    console.error(e);
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    hideOverlay();
+  }
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      // dataURL = "data:application/pdf;base64,XXXX"
+      const s = r.result.split(',')[1] || '';
+      resolve(s);
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+// ============================================================
+// LISTA DE REPORTES
+// ============================================================
+async function loadLista() {
+  const wrap = $('reportsListWrap');
+  wrap.innerHTML = '<p class="text-soft" style="text-align:center; padding:24px 0;">Cargando…</p>';
+  try {
+    const resp = await backendPost({ accion: 'listarReportes', token: state.session.token });
+    if (!resp.ok) {
+      if (resp.sesionExpirada) {
+        toast('Sesión expirada', 'error');
+        setTimeout(redirectLogin, 1500);
+        return;
+      }
+      throw new Error(resp.error);
+    }
+    if (!resp.reportes || resp.reportes.length === 0) {
+      wrap.innerHTML = '<p class="text-soft" style="text-align:center; padding:24px 0;">No hay reportes aún.</p>';
+      return;
+    }
+    wrap.innerHTML = '<div class="reports-list" id="reportsListInner"></div>';
+    const inner = $('reportsListInner');
+    for (const r of resp.reportes) {
+      const card = document.createElement('a');
+      card.className = 'report-card';
+      card.href = r.url;
+      card.target = '_blank';
+      card.rel = 'noopener';
+      const fecha = (r.fecha || '').split('T')[0];
+      card.innerHTML = `
+        <div class="name">${escapeHtml(r.name)}</div>
+        <div class="meta">
+          <span class="proy">${escapeHtml(r.proyecto || '—')}</span>
+          <span>${escapeHtml(fecha)}</span>
+        </div>
+      `;
+      inner.appendChild(card);
+    }
+  } catch (e) {
+    console.error(e);
+    wrap.innerHTML = `<p class="text-soft" style="text-align:center; padding:24px 0; color:var(--red)">Error: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  // 1) Verificar config
+  if (BACKEND_URL.indexOf('PEGA_AQUI') !== -1) {
+    document.body.innerHTML = `
+      <div class="config-warning">
+        <strong>Configuración requerida</strong><br><br>
+        Edita <code>cami-reportes-index.html</code> y reemplaza
+        <code>BACKEND_URL</code> con la URL del Apps Script desplegado v${VERSION}.
+      </div>`;
+    return;
+  }
+
+  // 2) Verificar sesión
+  state.session = getSession();
+  if (!state.session) { redirectLogin(); return; }
+  $('hdrUser').textContent = state.session.user || state.session.nombre || state.session.usuario || '';
+
+  // 3) Cargar catálogo y logo en paralelo
+  showView('gate', false);
+  try {
+    const [proyResp, logoResp] = await Promise.all([
+      backendGet({ accion: 'listaProyectos' }),
+      backendGet({ accion: 'getLogo' })
+    ]);
+    if (proyResp.ok) {
+      state.proyectos = proyResp.proyectos || [];
+      setProyectos(state.proyectos);
+    }
+    if (logoResp.ok) {
+      state.logoBase64 = logoResp.base64;
+      state.logoMime   = logoResp.mime;
+    }
+  } catch (e) {
+    console.warn('init load fail', e);
+    toast('Error cargando catálogos: ' + e.message, 'error');
+  }
+
+  // 4) Inicializar fecha de hoy
+  $('fFecha').value = todayISO();
+
+  // 5) Verificar si hay borrador
+  try {
+    const draft = await loadDraft();
+    if (draft && (draft.datos || (draft.fotos && draft.fotos.length))) {
+      $('draftBanner').style.display = 'flex';
+      $('btnRecuperar').onclick = async () => {
+        fillDatos(draft.datos);
+        // Cargar fotos del store
+        state.fotos = [];
+        for (const fmeta of (draft.fotos || [])) {
+          const photoBlob = await dbGet(STORE_PHOTOS, fmeta.id);
+          if (photoBlob && photoBlob.dataUrl) {
+            state.fotos.push({
+              id: fmeta.id,
+              dataUrl: photoBlob.dataUrl,
+              descripcion: fmeta.descripcion || '',
+              file_name: fmeta.file_name || '',
+              ts: fmeta.ts || ''
+            });
+          }
+        }
+        $('draftBanner').style.display = 'none';
+        renderPhotos();
+        toast('Borrador recuperado', 'success');
+      };
+      $('btnDescartar').onclick = async () => {
+        await clearDraft();
+        $('draftBanner').style.display = 'none';
+        toast('Borrador descartado');
+      };
+    }
+  } catch (e) { console.warn('draft check fail', e); }
+
+  // 6) Bind eventos
+  bindEvents();
+
+  // 7) Mostrar home
+  showView('home', false);
+}
+
+function bindEvents() {
+  // Header global
+  $('btnBack').onclick   = goBack;
+  $('btnLogout').onclick = () => {
+    if (!confirm('¿Cerrar sesión?')) return;
+    sessionStorage.removeItem('cami_session');
+    redirectLogin();
+  };
+
+  // Inicio
+  $('btnNuevo').onclick    = () => showView('datos');
+  $('btnVerLista').onclick = () => { showView('lista'); loadLista(); };
+
+  // Datos: live updates
+  ['fProyecto','fFecha'].forEach(id => $(id).addEventListener('change', () => {
+    autoTitulo();
+    scheduleSaveDraft();
+  }));
+  ['fTitulo','fCliente','fUbicacion','fDireccion','fContactoNombre',
+   'fContactoTel','fContactoEmpresa','fContactoEmail','fOtFolio','fDescripcion']
+    .forEach(id => $(id).addEventListener('input', scheduleSaveDraft));
+
+  // Fotos
+  $('inpCamara').onchange  = (e) => { onFiles(e.target.files); e.target.value = ''; };
+  $('inpGaleria').onchange = (e) => { onFiles(e.target.files); e.target.value = ''; };
+
+  // Done
+  $('btnNuevoMas').onclick = () => {
+    fillDatos({ fecha: todayISO() });
+    state.viewStack = [];
+    showView('datos', false);
+  };
+  $('btnVolverInicio').onclick = () => {
+    state.viewStack = [];
+    showView('home', false);
+  };
+}
+
+// Lanzar
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
