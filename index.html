@@ -954,16 +954,21 @@ SCRIPT — APP LOGIC
 // IMPORTANTE: pega aquí la URL del Apps Script desplegado de
 // cami-reportes v1.1 (la URL nueva del despliegue, NO la del
 // editor). Termina en /exec.
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbw93UlXO1tWeDFU52YXDUDWRdyfR3hjzNMASeKOUorSz1CSCddPRqOZoDJDuiBJtAysvQ/exec';
+const BACKEND_URL = https://script.google.com/macros/s/AKfycbw93UlXO1tWeDFU52YXDUDWRdyfR3hjzNMASeKOUorSz1CSCddPRqOZoDJDuiBJtAysvQ/exec;
 
 const LOGIN_URL    = 'https://alfredoaguado-arch.github.io/cami-app2/';
 const APP_KEY      = 'reportes';
 const META_PREFIX  = 'CAMI_REPORTE_DATA::';
-const VERSION      = '1.1';
+const VERSION      = '1.2';
 
 // Compresión / dimensión máxima de fotos (lado mayor)
-const PHOTO_MAX_DIM = 1600;
-const PHOTO_QUALITY = 0.75;
+// v1.2: bajado de 1600/0.75 a 1200/0.65 para evitar OOM en móvil con muchas fotos
+const PHOTO_MAX_DIM = 1200;
+const PHOTO_QUALITY = 0.65;
+
+// Tamaño máximo aceptable del payload codificado (MB).
+// Si pasa, advertimos al usuario antes de intentar subir.
+const MAX_PAYLOAD_MB = 8;
 
 // IndexedDB
 const DB_NAME      = 'cami-reportes';
@@ -1547,6 +1552,9 @@ function generarPDFCore(opts) {
     creator:  'cami-reportes v' + VERSION
   });
 
+  // v1.2: liberar cache de imágenes una vez dentro del PDF para soltar memoria
+  state._imgCache = {};
+
   return doc;
 }
 
@@ -2013,17 +2021,20 @@ async function onGenerarPreview() {
   showOverlay('Generando vista previa…');
   try {
     await precacheImages();
+    console.log('[CAMI-REPORTES v' + VERSION + '] Generando PDF para', state.fotos.length, 'fotos');
     const doc = generarPDFParaPreview();
     state.pdfDataUrl = doc.output('datauristring');
     state.pdfBlob    = doc.output('blob');
+    const sizeMB = state.pdfBlob.size / 1024 / 1024;
+    console.log('[CAMI-REPORTES] PDF generado:', sizeMB.toFixed(2), 'MB');
     // Folio provisional
     const proy = (state.datos.proyecto || 'PROYECTO').toUpperCase();
     const fec  = state.datos.fecha || todayISO();
-    $('prevFolio').textContent = `REP-${proy}-NNN-${fec}`;
+    $('prevFolio').textContent = `REP-${proy}-NNN-${fec} · ${sizeMB.toFixed(1)} MB`;
     $('prevFrame').src = state.pdfDataUrl;
     showView('preview');
   } catch (e) {
-    console.error(e);
+    console.error('[CAMI-REPORTES] Error generando preview:', e);
     toast('Error generando PDF: ' + e.message, 'error');
   } finally {
     hideOverlay();
@@ -2036,57 +2047,104 @@ async function onSubirReporte() {
     toast('Genera la vista previa primero', 'error');
     return;
   }
-  showOverlay('Subiendo reporte a Drive…');
-  try {
-    // Convertir PDF a base64
-    const pdfBase64 = await blobToBase64(state.pdfBlob);
-    const d = state.datos;
 
-    const payload = {
-      accion: 'crearReporte',
-      token: state.session.token,
-      proyecto: d.proyecto,
-      fecha: d.fecha,
-      titulo: d.titulo || ('Reporte ' + d.proyecto + ' ' + formatDateNice(d.fecha)),
-      ubicacion: d.ubicacion,
-      cliente: d.cliente,
-      direccion: d.direccion,
-      contacto_nombre: d.contacto_nombre,
-      contacto_empresa: d.contacto_empresa,
-      contacto_telefono: d.contacto_telefono,
-      contacto_email: d.contacto_email,
-      ot_folio: d.ot_folio,
-      fotos: state.fotos.map((f, i) => ({
-        orden: i + 1,
-        descripcion: f.descripcion || '',
-        file_name: f.file_name || ''
-      })),
-      pdfBase64: pdfBase64
-    };
-    const resp = await backendPost(payload);
-    if (!resp.ok) {
-      if (resp.sesionExpirada) {
-        toast('Sesión expirada — redirigiendo…', 'error');
-        setTimeout(redirectLogin, 1500);
-        return;
-      }
-      throw new Error(resp.error || 'Error desconocido');
-    }
-    // Limpiar borrador
-    await clearDraft();
-    state.fotos = [];
-    state.datos = {};
-    // Mostrar confirmación
-    $('doneFolio').textContent = resp.folio;
-    $('lnkDrive').href = resp.pdfUrl;
-    showView('done');
-    toast('Reporte subido correctamente', 'success');
-  } catch (e) {
-    console.error(e);
-    toast('Error: ' + e.message, 'error');
-  } finally {
-    hideOverlay();
+  // v1.2: validar peso ANTES de intentar subir
+  const pdfMB = state.pdfBlob.size / 1024 / 1024;
+  console.log('[CAMI-REPORTES v' + VERSION + '] PDF size:', pdfMB.toFixed(2), 'MB',
+              '· fotos:', state.fotos.length);
+
+  if (pdfMB * 1.37 > MAX_PAYLOAD_MB) { // 1.37 = overhead aprox de base64
+    const ok = confirm(
+      'El reporte pesa ~' + pdfMB.toFixed(1) + ' MB y puede fallar al subir.\n\n' +
+      'Te recomendamos:\n' +
+      '  1) Volver a "Atrás" y eliminar algunas fotos.\n' +
+      '  2) O probar a subirlo de todas formas.\n\n' +
+      '¿Continuar e intentar subir?'
+    );
+    if (!ok) return;
   }
+
+  showOverlay('Subiendo reporte a Drive…');
+  let pdfBase64;
+  try {
+    pdfBase64 = await blobToBase64(state.pdfBlob);
+  } catch (e) {
+    console.error('[CAMI-REPORTES] Error codificando PDF:', e);
+    hideOverlay();
+    toast('Error preparando el PDF: ' + e.message, 'error');
+    return;
+  }
+
+  console.log('[CAMI-REPORTES] Base64 length:', pdfBase64.length,
+              '(~' + (pdfBase64.length / 1024 / 1024).toFixed(2) + ' MB)');
+
+  const d = state.datos;
+  const payload = {
+    accion: 'crearReporte',
+    token: state.session.token,
+    proyecto: d.proyecto,
+    fecha: d.fecha,
+    titulo: d.titulo || ('Reporte ' + d.proyecto + ' ' + formatDateNice(d.fecha)),
+    ubicacion: d.ubicacion,
+    cliente: d.cliente,
+    direccion: d.direccion,
+    contacto_nombre: d.contacto_nombre,
+    contacto_empresa: d.contacto_empresa,
+    contacto_telefono: d.contacto_telefono,
+    contacto_email: d.contacto_email,
+    ot_folio: d.ot_folio,
+    fotos: state.fotos.map(function (f, i) {
+      return { orden: i + 1, descripcion: f.descripcion || '', file_name: f.file_name || '' };
+    }),
+    pdfBase64: pdfBase64
+  };
+
+  // Llamar al backend con manejo robusto de errores
+  let resp;
+  try {
+    resp = await backendPost(payload);
+  } catch (e) {
+    console.error('[CAMI-REPORTES] Error de red al subir:', e);
+    hideOverlay();
+    toast('Error de red al subir. Revisa tu conexión y vuelve a intentar.', 'error');
+    return;
+  }
+
+  console.log('[CAMI-REPORTES] Backend response:', resp);
+
+  if (!resp || typeof resp !== 'object') {
+    hideOverlay();
+    toast('Respuesta inválida del servidor. Intenta de nuevo.', 'error');
+    return;
+  }
+
+  if (!resp.ok) {
+    hideOverlay();
+    if (resp.sesionExpirada) {
+      toast('Sesión expirada — redirigiendo al login…', 'error');
+      setTimeout(redirectLogin, 1800);
+      return;
+    }
+    toast('Error: ' + (resp.error || 'desconocido'), 'error');
+    return;
+  }
+
+  // ÉXITO real: solo aquí limpiamos draft y mostramos confirmación
+  try {
+    await clearDraft();
+  } catch (e) { console.warn('clearDraft fail (no bloquea):', e); }
+  state.fotos = [];
+  state.datos = {};
+  state.pdfBlob = null;
+  state.pdfDataUrl = null;
+  // Liberar el iframe del preview (suelta memoria del PDF en blob)
+  try { $('prevFrame').src = 'about:blank'; } catch (e) {}
+
+  $('doneFolio').textContent = resp.folio;
+  $('lnkDrive').href = resp.pdfUrl;
+  hideOverlay();
+  showView('done');
+  toast('Reporte subido correctamente', 'success');
 }
 
 function blobToBase64(blob) {
