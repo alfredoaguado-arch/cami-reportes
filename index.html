@@ -959,7 +959,7 @@ const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbw93UlXO1tWeDFU52YX
 const LOGIN_URL    = 'https://alfredoaguado-arch.github.io/cami-app2/';
 const APP_KEY      = 'reportes';
 const META_PREFIX  = 'CAMI_REPORTE_DATA::';
-const VERSION      = '1.5';
+const VERSION      = '1.7';
 
 // Compresión / dimensión máxima de fotos (lado mayor)
 // v1.2: bajado de 1600/0.75 a 1200/0.65 para evitar OOM en móvil con muchas fotos
@@ -1510,7 +1510,7 @@ function generarPDFCore(opts) {
 
     // === Determinar reservas inferiores
     const isLast = (h === numHojas - 1);
-    const footerH = mm(5.5);
+    const footerH = mm(7);
     const sigBlockH = isLast ? mm(26) + mm(2) : 0;
     const bottomReserve = sigBlockH + footerH + mm(2);
 
@@ -1590,9 +1590,14 @@ function drawHeader(doc, folio, hojaN, hojaTotal, subtitulo) {
   // Logo (a la izquierda, dentro del header)
   if (state.logoBase64) {
     try {
-      const logoH = mm(14);
-      const logoW = logoH * 0.75; // proporción ~3:4
-      const logoX = x + mm(5);
+      const logoH = mm(13);
+      // v1.7: usar proporción real del archivo en Drive si la conocemos.
+      // Si no, fallback al ratio del PNG que originalmente procesamos.
+      const realRatio = (state.logoImg && state.logoImg.naturalHeight)
+        ? (state.logoImg.naturalWidth / state.logoImg.naturalHeight)
+        : 0.75;
+      const logoW = logoH * realRatio;
+      const logoX = x + mm(7);
       const logoY = y + (h - logoH) / 2;
       doc.addImage('data:' + (state.logoMime || 'image/png') + ';base64,' + state.logoBase64,
                    'PNG', logoX, logoY, logoW, logoH, undefined, 'FAST');
@@ -1637,8 +1642,8 @@ function drawHeader(doc, folio, hojaN, hojaTotal, subtitulo) {
     doc.text(subTrunc, subX, ty + mm(1));
   }
 
-  // Meta a la derecha
-  const metaX = x + w - mm(7);
+  // Meta a la derecha (con margen extra para no chocar con la barra naranja vertical)
+  const metaX = x + w - mm(11);
   setText(doc, PDF.c.paper);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
@@ -1950,18 +1955,18 @@ function drawSignature(doc, y) {
 function drawFooter(doc, folio) {
   const x = PDF.pad.x;
   const w = PDF.W - 2 * PDF.pad.x;
-  const yLine = PDF.H - PDF.pad.y - mm(5);
+  const yLine = PDF.H - PDF.pad.y - mm(6);
 
   // Línea naranja superior
   setDraw(doc, PDF.c.orange);
   doc.setLineWidth(1.1);
   doc.line(x, yLine, x + w, yLine);
 
-  // Marca a la izquierda
-  const yText = yLine + mm(3);
+  // === IZQUIERDA: marca CAMI
+  const yText = yLine + mm(3.2);
   // Mark cuadrado navy con C naranja
   setFill(doc, PDF.c.navy);
-  doc.roundedRect(x, yText - mm(2.5), mm(3.5), mm(3.5), 0.6, 0.6, 'F');
+  doc.roundedRect(x, yText - mm(2.6), mm(3.5), mm(3.5), 0.6, 0.6, 'F');
   setText(doc, PDF.c.orange);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
@@ -1975,15 +1980,23 @@ function drawFooter(doc, folio) {
             x + mm(5), yText);
   doc.setCharSpace(0);
 
-  // Folio a la derecha
-  setText(doc, PDF.c.inkSoft);
-  doc.setFont('helvetica', 'normal');
+  // === DERECHA: "DOCUMENTO CONTROLADO ·" + folio bold
+  // Estrategia: dibujar el folio right-aligned al borde derecho, medir su
+  // ancho, y poner "DOCUMENTO CONTROLADO ·" right-aligned justo a la
+  // izquierda del folio para evitar superposiciones.
+  const folioStr = folio.toUpperCase();
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setCharSpace(1);
-  doc.text('DOCUMENTO CONTROLADO · ', x + w - mm(38), yText);
-  doc.setFont('helvetica', 'bold');
   setText(doc, PDF.c.navy);
-  doc.text(folio.toUpperCase(), x + w, yText, { align: 'right' });
+  const folioW = doc.getTextWidth(folioStr);
+  doc.text(folioStr, x + w, yText, { align: 'right' });
+
+  // "DOCUMENTO CONTROLADO ·" en gris, justo a la izquierda del folio
+  doc.setFont('helvetica', 'normal');
+  setText(doc, PDF.c.inkSoft);
+  const docCtrl = 'DOCUMENTO CONTROLADO ·';
+  doc.text(docCtrl, x + w - folioW - mm(2), yText, { align: 'right' });
   doc.setCharSpace(0);
 }
 
@@ -2310,6 +2323,16 @@ async function init() {
     if (logoResp.ok) {
       state.logoBase64 = logoResp.base64;
       state.logoMime   = logoResp.mime;
+      // v1.7: cargar como Image para conocer las dimensiones reales del
+      // archivo en Drive y dibujarlo en el PDF sin distorsión.
+      try {
+        await new Promise(function (resolve) {
+          const img = new Image();
+          img.onload = function () { state.logoImg = img; resolve(); };
+          img.onerror = function () { state.logoImg = null; resolve(); };
+          img.src = 'data:' + state.logoMime + ';base64,' + state.logoBase64;
+        });
+      } catch (e) { state.logoImg = null; }
     }
   } catch (e) {
     console.warn('init load fail', e);
