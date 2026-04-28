@@ -959,7 +959,7 @@ const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbw93UlXO1tWeDFU52YX
 const LOGIN_URL    = 'https://alfredoaguado-arch.github.io/cami-app2/';
 const APP_KEY      = 'reportes';
 const META_PREFIX  = 'CAMI_REPORTE_DATA::';
-const VERSION      = '1.4';
+const VERSION      = '1.5';
 
 // Compresión / dimensión máxima de fotos (lado mayor)
 // v1.2: bajado de 1600/0.75 a 1200/0.65 para evitar OOM en móvil con muchas fotos
@@ -1511,7 +1511,7 @@ function generarPDFCore(opts) {
     // === Determinar reservas inferiores
     const isLast = (h === numHojas - 1);
     const footerH = mm(5.5);
-    const sigBlockH = isLast ? mm(22) + mm(2) : 0;
+    const sigBlockH = isLast ? mm(26) + mm(2) : 0;
     const bottomReserve = sigBlockH + footerH + mm(2);
 
     // === Cuadrícula de fotos 2x2
@@ -1524,7 +1524,7 @@ function generarPDFCore(opts) {
 
     // === Bloque de firma (solo última hoja)
     if (isLast) {
-      drawSignature(doc, PDF.H - PDF.pad.y - footerH - mm(2) - mm(22));
+      drawSignature(doc, PDF.H - PDF.pad.y - footerH - mm(2) - mm(26));
     }
 
     // === Footer
@@ -1698,11 +1698,11 @@ function drawField(doc, x, y, w, label, value) {
   doc.setFontSize(8.5);
   const safeVal = value || '—';
   const truncated = truncateText(doc, safeVal, w - mm(1));
-  doc.text(truncated, x, y + mm(3.4));
-  // Línea inferior
+  doc.text(truncated, x, y + mm(3.9));
+  // Línea inferior con más aire
   setDraw(doc, PDF.c.rule2);
   doc.setLineWidth(0.4);
-  doc.line(x, y + mm(4.6), x + w, y + mm(4.6));
+  doc.line(x, y + mm(5.4), x + w, y + mm(5.4));
 }
 
 function drawSeccionDatosCompleta(doc, y, d) {
@@ -1710,7 +1710,7 @@ function drawSeccionDatosCompleta(doc, y, d) {
   const totalW = PDF.W - 2 * PDF.pad.x;
   // Sec title
   drawSecTitle(doc, x, y, '01', 'Datos del proyecto');
-  let cy = y + mm(5.5);
+  let cy = y + mm(6);
 
   // Grid 6 columnas: 2 + 2 + 2 (3 columnas usables, cada una span 2)
   const colW = (totalW - 2 * mm(4)) / 3;
@@ -1719,17 +1719,17 @@ function drawSeccionDatosCompleta(doc, y, d) {
   drawField(doc, x,                       cy, colW, 'Proyecto',           d.proyecto);
   drawField(doc, x + colW + mm(4),        cy, colW, 'Cliente',            d.cliente);
   drawField(doc, x + 2*(colW + mm(4)),    cy, colW, 'Ubicación / sitio',  d.ubicacion);
-  cy += mm(7.4);
+  cy += mm(8.6);
   // Fila 2
   drawField(doc, x,                       cy, colW, 'OT / Folio interno', d.ot_folio);
   drawField(doc, x + colW + mm(4),        cy, colW, 'Fecha del reporte',  formatDateNice(d.fecha || todayISO()));
   drawField(doc, x + 2*(colW + mm(4)),    cy, colW,
             'Contacto',
             (d.contacto_nombre || '') + (d.contacto_telefono ? ' · ' + d.contacto_telefono : ''));
-  cy += mm(7.4);
+  cy += mm(8.6);
   // Descripción full width (col-6)
   drawField(doc, x, cy, totalW, 'Descripción del trabajo', d.descripcion);
-  cy += mm(7);
+  cy += mm(7.5);
 
   return cy;
 }
@@ -1737,7 +1737,7 @@ function drawSeccionDatosCompleta(doc, y, d) {
 function drawDatosCompactos(doc, y, d) {
   const x = PDF.pad.x;
   const totalW = PDF.W - 2 * PDF.pad.x;
-  const h = mm(7);
+  const h = mm(8.5);
 
   // Fondo paper-2 con borde naranja izquierdo
   setFill(doc, PDF.c.paper2);
@@ -1752,8 +1752,8 @@ function drawDatosCompactos(doc, y, d) {
     ['OT',        d.ot_folio || '—'],
     ['SITIO',     d.ubicacion || '—']
   ];
-  let cx = x + mm(3);
-  const cy = y + mm(4.5);
+  let cx = x + mm(4);
+  const cy = y + mm(5.3);
   for (const [lab, val] of pairs) {
     setText(doc, PDF.c.inkSoft);
     doc.setFont('helvetica', 'bold');
@@ -1761,8 +1761,6 @@ function drawDatosCompactos(doc, y, d) {
     doc.setCharSpace(1);
     doc.text(lab + ':', cx, cy);
     // v1.4: medir el ancho del label MIENTRAS el charSpace sigue activo.
-    // Antes medíamos después del reset y el ancho calculado era menor
-    // que el real → el value se pegaba al label sin espacio visible.
     const labW = doc.getTextWidth(lab + ':');
     doc.setCharSpace(0);
 
@@ -1770,8 +1768,8 @@ function drawDatosCompactos(doc, y, d) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     const vTrunc = truncateText(doc, String(val), mm(60));
-    doc.text(vTrunc, cx + labW + mm(2), cy);
-    cx += labW + mm(2) + doc.getTextWidth(vTrunc) + mm(6);
+    doc.text(vTrunc, cx + labW + mm(2.5), cy);
+    cx += labW + mm(2.5) + doc.getTextWidth(vTrunc) + mm(8);
     if (cx > x + totalW - mm(20)) break;
   }
   return y + h;
@@ -1810,7 +1808,7 @@ function drawPhotosGrid(doc, gridTop, gridW, gridH, fotos, hojaIdx) {
     }
 
     // Caption (abajo) altura fija
-    const captionH = mm(11);
+    const captionH = mm(12.5);
     const imgH = cellH - captionH;
     // Imagen
     try {
@@ -1825,9 +1823,9 @@ function drawPhotosGrid(doc, gridTop, gridW, gridH, fotos, hojaIdx) {
     doc.line(cx, cy + imgH, cx + cellW, cy + imgH);
 
     // Caption: badge naranja + descripción + timestamp
-    const padCap = mm(2);
+    const padCap = mm(2.5);
     const capX = cx + padCap;
-    const capY = cy + imgH + mm(2);
+    const capY = cy + imgH + mm(2.4);
     // Badge naranja
     setFill(doc, PDF.c.orange);
     doc.circle(capX + mm(2.5), capY + mm(2.5), mm(2.4), 'F');
@@ -1840,8 +1838,8 @@ function drawPhotosGrid(doc, gridTop, gridW, gridH, fotos, hojaIdx) {
     setText(doc, PDF.c.ink);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    const descX = capX + mm(7);
-    const descW = cellW - mm(7) - 2 * padCap;
+    const descX = capX + mm(7.5);
+    const descW = cellW - mm(7.5) - 2 * padCap;
     const descLines = doc.splitTextToSize(f.descripcion || '', descW);
     // máximo 2 líneas
     const linesToShow = descLines.slice(0, 2);
@@ -1852,7 +1850,7 @@ function drawPhotosGrid(doc, gridTop, gridW, gridH, fotos, hojaIdx) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(5.6);
     doc.setCharSpace(1);
-    doc.text((f.ts || '').toUpperCase(), descX, capY + mm(8));
+    doc.text((f.ts || '').toUpperCase(), descX, capY + mm(8.3));
     doc.setCharSpace(0);
   }
 }
@@ -1903,9 +1901,9 @@ function drawPhotoFit(doc, dataUrl, x, y, w, h) {
 }
 
 function drawSignature(doc, y) {
-  const blockW = mm(78);
+  const blockW = mm(86);
   const x = PDF.W - PDF.pad.x - blockW;
-  const h = mm(22);
+  const h = mm(26);
 
   // Caja blanca con borde
   setFill(doc, [255, 255, 255]);
@@ -1918,35 +1916,35 @@ function drawSignature(doc, y) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   doc.setCharSpace(1.5);
-  doc.text('RESPONSABLE CAMI', x + mm(3), y + mm(3.5));
+  doc.text('RESPONSABLE CAMI', x + mm(3.5), y + mm(4));
   doc.setCharSpace(0);
 
   // Subrótulo
   setText(doc, PDF.c.navy);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
-  doc.text('Firma de conformidad', x + mm(3), y + mm(6));
+  doc.text('Firma de conformidad', x + mm(3.5), y + mm(7));
 
-  // Línea para firma
+  // Línea para firma con más aire
   setDraw(doc, PDF.c.navy);
   doc.setLineWidth(0.6);
-  doc.line(x + mm(3), y + mm(13), x + blockW - mm(3), y + mm(13));
+  doc.line(x + mm(3.5), y + mm(15.5), x + blockW - mm(3.5), y + mm(15.5));
 
-  // Mini fields nombre / fecha (dos columnas)
+  // Mini fields nombre / fecha (dos columnas) con más respiración
   const fechaX = x + blockW * 0.6;
   setText(doc, PDF.c.inkSoft);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(5.5);
   doc.setCharSpace(1.2);
-  doc.text('NOMBRE', x + mm(3),  y + mm(16.5));
-  doc.text('FECHA',  fechaX,     y + mm(16.5));
+  doc.text('NOMBRE', x + mm(3.5),  y + mm(19));
+  doc.text('FECHA',  fechaX,       y + mm(19));
   doc.setCharSpace(0);
 
   // Líneas para nombre/fecha
   setDraw(doc, PDF.c.rule2);
   doc.setLineWidth(0.4);
-  doc.line(x + mm(3),  y + mm(20), fechaX - mm(2),       y + mm(20));
-  doc.line(fechaX,     y + mm(20), x + blockW - mm(3),   y + mm(20));
+  doc.line(x + mm(3.5), y + mm(22.5), fechaX - mm(2),       y + mm(22.5));
+  doc.line(fechaX,      y + mm(22.5), x + blockW - mm(3.5), y + mm(22.5));
 }
 
 function drawFooter(doc, folio) {
