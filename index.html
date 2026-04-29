@@ -959,7 +959,7 @@ const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbw93UlXO1tWeDFU52YX
 const LOGIN_URL    = 'https://alfredoaguado-arch.github.io/cami-app2/';
 const APP_KEY      = 'reportes';
 const META_PREFIX  = 'CAMI_REPORTE_DATA::';
-const VERSION      = '1.7';
+const VERSION      = '1.8';
 
 // Compresión / dimensión máxima de fotos (lado mayor)
 // v1.2: bajado de 1600/0.75 a 1200/0.65 para evitar OOM en móvil con muchas fotos
@@ -1587,17 +1587,19 @@ function drawHeader(doc, folio, hojaN, hojaTotal, subtitulo) {
   setFill(doc, PDF.c.orange);
   doc.rect(x + w - mm(2), y, mm(2), h, 'F');
 
-  // Logo (a la izquierda, dentro del header)
+  // Logo (a la izquierda, dentro del header — centrado en su espacio)
   if (state.logoBase64) {
     try {
       const logoH = mm(13);
-      // v1.7: usar proporción real del archivo en Drive si la conocemos.
-      // Si no, fallback al ratio del PNG que originalmente procesamos.
+      // Proporción real del archivo en Drive
       const realRatio = (state.logoImg && state.logoImg.naturalHeight)
         ? (state.logoImg.naturalWidth / state.logoImg.naturalHeight)
         : 0.75;
       const logoW = logoH * realRatio;
-      const logoX = x + mm(7);
+      // v1.8: centrar el logo en el espacio reservado (entre x y tx=mm(22))
+      const slotStart = x;
+      const slotEnd   = x + mm(22);
+      const logoX = slotStart + ((slotEnd - slotStart) - logoW) / 2;
       const logoY = y + (h - logoH) / 2;
       doc.addImage('data:' + (state.logoMime || 'image/png') + ';base64,' + state.logoBase64,
                    'PNG', logoX, logoY, logoW, logoH, undefined, 'FAST');
@@ -1962,41 +1964,41 @@ function drawFooter(doc, folio) {
   doc.setLineWidth(1.1);
   doc.line(x, yLine, x + w, yLine);
 
-  // === IZQUIERDA: marca CAMI
   const yText = yLine + mm(3.2);
-  // Mark cuadrado navy con C naranja
-  setFill(doc, PDF.c.navy);
-  doc.roundedRect(x, yText - mm(2.6), mm(3.5), mm(3.5), 0.6, 0.6, 'F');
-  setText(doc, PDF.c.orange);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6);
-  doc.text('C', x + mm(1.75), yText - mm(0.5), { align: 'center' });
+  const folioStr = folio.toUpperCase();
+  const docCtrl  = 'DOCUMENTO CONTROLADO · ';
 
+  // === IZQUIERDA: marca corta
   setText(doc, PDF.c.inkSoft);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setCharSpace(1);
-  doc.text('CAMI · COMERCIALIZADORA DE ACEROS MANUFACTURADOS PARA LA INDUSTRIA',
-            x + mm(5), yText);
+  doc.text('CAMI · ACEROS MANUFACTURADOS', x, yText);
   doc.setCharSpace(0);
 
-  // === DERECHA: "DOCUMENTO CONTROLADO ·" + folio bold
-  // Estrategia: dibujar el folio right-aligned al borde derecho, medir su
-  // ancho, y poner "DOCUMENTO CONTROLADO ·" right-aligned justo a la
-  // izquierda del folio para evitar superposiciones.
-  const folioStr = folio.toUpperCase();
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6);
+  // === CENTRO: "DOCUMENTO CONTROLADO · folio"
+  // Calculamos el ancho total del bloque para centrarlo en la página.
   doc.setCharSpace(1);
-  setText(doc, PDF.c.navy);
-  const folioW = doc.getTextWidth(folioStr);
-  doc.text(folioStr, x + w, yText, { align: 'right' });
-
-  // "DOCUMENTO CONTROLADO ·" en gris, justo a la izquierda del folio
   doc.setFont('helvetica', 'normal');
   setText(doc, PDF.c.inkSoft);
-  const docCtrl = 'DOCUMENTO CONTROLADO ·';
-  doc.text(docCtrl, x + w - folioW - mm(2), yText, { align: 'right' });
+  const docCtrlW = doc.getTextWidth(docCtrl);
+
+  doc.setFont('helvetica', 'bold');
+  setText(doc, PDF.c.navy);
+  const folioW = doc.getTextWidth(folioStr);
+
+  const totalW = docCtrlW + folioW;
+  const startX = x + (w - totalW) / 2;
+
+  // Texto gris
+  doc.setFont('helvetica', 'normal');
+  setText(doc, PDF.c.inkSoft);
+  doc.text(docCtrl, startX, yText);
+
+  // Folio en navy bold pegado al texto gris
+  doc.setFont('helvetica', 'bold');
+  setText(doc, PDF.c.navy);
+  doc.text(folioStr, startX + docCtrlW, yText);
   doc.setCharSpace(0);
 }
 
